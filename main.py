@@ -14,6 +14,7 @@ from config import (
     DEFAULT_BAUD,
     DEFAULT_SESSION_MARKER,
     DEFAULT_LOG_DIR,
+    DEFAULT_DATA_DIR,
     QUEUE_MAX_SIZE,
     QUEUE_TIMEOUT,
     THREAD_JOIN_TIMEOUT,
@@ -31,7 +32,8 @@ def run_threads(args):
         args: Parsed command-line arguments
     """
     logs_dir = Path(args.log_dir).expanduser().resolve()
-    recorder = FileRecorder(logs_dir, args.session_marker)
+    data_dir = Path(args.data_dir).expanduser().resolve() if args.data_dir else None
+    recorder = FileRecorder(logs_dir, args.session_marker, data_dir=data_dir)
 
     # Port getter closure uses current args & auto-detect logic
     def _get_port():
@@ -116,6 +118,11 @@ def main():
         "--log-dir",
         default=DEFAULT_LOG_DIR,
         help=f"Directory to write logs into. Default: {DEFAULT_LOG_DIR}",
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=DEFAULT_DATA_DIR,
+        help=f"Directory to write data lines (lines starting with '[D]') into. Default: {DEFAULT_DATA_DIR}",
     )
     parser.add_argument(
         "--session-marker",

@@ -30,7 +30,7 @@ DATE_FORMAT = "%d-%m-%Y"
 TIMESTAMP_FORMAT = "%d-%m-%Y %H:%M:%S"
 SESSION_FILE_PATTERN = "session-{:03d}.log"
 DATA_FILE_PATTERN = "data-{:03d}.log"  # Pattern for data files
-DATA_LINE_PREFIX = "D"  # Prefix that identifies data lines
+DATA_LINE_PREFIX = "[D]"  # Prefix that identifies data lines
 
 # Threading
 THREAD_JOIN_TIMEOUT = 2.0  # seconds
