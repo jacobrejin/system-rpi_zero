@@ -2,6 +2,7 @@
 
 ## OS Installation Steps:
 1. Flash a Raspbian Server OS image to the SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/).
+**Raspberry Pi OS Lite(64 bit) A port of Debian Trixie with no Desktop Environment**
 2. Mak esure to setup a temporary wifi credential in the imager settings. (This could be an hotspot from the phone)
 3. Also make sure to enable SSH in the imager settings, and add the pi username and hostname for ease of connection later.
 4. Insert the SD card into the RPI Zero 2W and power it on.
@@ -39,7 +40,7 @@ This guide documents how to connect a **Raspberry Pi Zero 2W (Lite, headless)** 
 2. Go to [https://resnet.apps.cranfield.ac.uk/](https://resnet.apps.cranfield.ac.uk/), add a new PSK for that MAC, and copy the generated password.
 3. Create the IoT connection:
    ```bash
-   sudo nmcli connection add type wifi ifname wlan0 con-name cranfield-iot ssid "Cranfield IoT"
+   sudo nmcli connection add type wifi ifname wlan0 con-name cranfield-iot ssid "Cranfield IOT"
    sudo nmcli connection modify cranfield-iot wifi-sec.key-mgmt wpa-psk wifi-sec.psk "YOUR_PSK"
    sudo nmcli connection modify cranfield-iot connection.autoconnect yes connection.autoconnect-priority 100
    sudo nmcli connection up cranfield-iot
@@ -59,7 +60,7 @@ If you keep a backup network (e.g. *preconfigured*):
 sudo nmcli connection modify preconfigured connection.autoconnect yes
 sudo nmcli connection modify preconfigured connection.autoconnect-priority 80
 ```
-NetworkManager will prefer **Cranfield IoT**, but fall back to **preconfigured** if IoT is unavailable.
+NetworkManager will prefer **Cranfield IOT**, but fall back to **preconfigured** if IOT is unavailable.
 
 Check autoconnect status:
 ```bash
@@ -79,3 +80,17 @@ nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
 | Verify IP | `ip addr show wlan0` |
 | Logs for Wi‑Fi | `journalctl -u NetworkManager -b | tail -n 50` |
 | Test connectivity | `ping -c4 8.8.8.8` |
+
+# Using the Auto-Setup Script
+
+1 - Copy to your Pi and run as root
+chmod +x setup_pi_wifi_rpi_connect.sh
+sudo ./setup_pi_wifi_rpi_connect.sh
+
+2 - When it shows your MAC, go register it at:
+   https://resnet.apps.cranfield.ac.uk/
+   (Add new PSK -> paste MAC -> copy generated PSK)
+
+3 - Paste the PSK into the script when prompted.
+4 - It’ll bring up “Cranfield IOT”, keep “preconfigured” as fallback (if present),
+   and guide you through rpi-connect signin.
