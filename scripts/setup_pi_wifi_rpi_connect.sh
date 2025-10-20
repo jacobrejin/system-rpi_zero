@@ -14,6 +14,26 @@
 # fail when any command fails in the pipeline.
 set -euo pipefail
 
+# --- Logging setup ---------------------------------------------------------
+# Create a timestamped logfile in /var/log when possible, otherwise fall
+# back to the script directory. All stdout/stderr from the script will be
+# tee'd to this logfile so the user can inspect it later if connectivity
+# is lost or for debugging.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_DIR="${SCRIPT_DIR}"
+LOGFILE_NAME="setup_pi_wifi_rpi_connect-$(date +%Y%m%d-%H%M%S).log"
+LOGFILE_PATH="${LOG_DIR}/${LOGFILE_NAME}"
+
+# Open a file descriptor that tees stdout+stderr to the logfile while
+# preserving interactive stdin. We redirect both stdout and stderr into
+# tee so the logfile contains everything the user saw in the terminal.
+exec > >(tee -a "${LOGFILE_PATH}") 2>&1
+
+# Print a header so logs are easier to parse later
+echo "--- setup_pi_wifi_rpi_connect.sh log started: $(date -u +'%Y-%m-%dT%H:%M:%SZ') ---"
+echo "Logfile: ${LOGFILE_PATH}"
+echo
+
 # Terminal color codes for prettier output messages
 RED='\033[0;31m'; GREEN='\033[0;32m'; YEL='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 

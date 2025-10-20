@@ -218,3 +218,5 @@ __marimo__/
 
 logs/
 data/
+# Ignore logs created by the setup script in `scripts/`
+/scripts/*.log
