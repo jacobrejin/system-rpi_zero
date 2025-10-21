@@ -94,3 +94,70 @@ sudo ./setup_pi_wifi_rpi_connect.sh
 3 - Paste the PSK into the script when prompted.
 4 - It’ll bring up “Cranfield IOT”, keep “preconfigured” as fallback (if present),
    and guide you through rpi-connect signin.
+
+---
+
+## Cloning and running a private GitHub repository on the Pi
+
+You can clone a private GitHub repository to your Raspberry Pi Zero 2W using a Personal Access Token (PAT). The PAT method is the safest option for automation and scripts.
+
+1) Generate a Personal Access Token (once, on your main computer)
+
+- Go to https://github.com/settings/tokens
+- Click "Generate new token → Fine-grained token"
+- Give it repo read permissions and copy the token (it looks like `ghp_xxxxxxxxx...`).Sometimes called the Content Access Token Permission
+
+2) Clone the private repository (quick but embed-token method)
+
+On the Pi, replace <USER>, <TOKEN> and <REPO> with your values:
+
+```
+cd ~
+git clone https://<USER>:<TOKEN>@github.com/<USER>/<REPO>.git
+```
+
+Example:
+
+```
+git clone https://myusername:ghp_abcd1234efgh5678ijkl9012mnop3456qrst@github.com/myusername/rpi-zero-project.git
+```
+
+Tip: Use single quotes around the URL if your token contains special characters.
+
+3) Safer: use an environment variable for the token
+
+Set the token in your shell (this avoids leaving the token in shell history for some shells):
+
+```
+export GITHUB_TOKEN="ghp_abcd1234efgh5678ijkl9012mnop3456qrst"
+git clone https://$GITHUB_TOKEN@github.com/<USER>/<REPO>.git
+```
+
+On Debian-based systems you can add the export to `~/.profile` or a dedicated `~/.bashrc_local` file, but be careful with file permissions (see security notes below).
+
+4) Run the project on the Pi
+
+Change into the repository directory and run whatever your project uses. Common examples:
+
+Create a virtual environment (optional but recommended for Python projects):
+
+```python3 -m venv venv
+source venv/bin/activate
+```
+
+Install the required dependencies (if any):
+```
+pip3 install -r requirements.txt
+```
+
+Then run:
+
+```
+cd <REPO>
+# For Python
+python3 main.py
+# or for shell
+bash run.sh
+# or for Flask / FastAPI
+python3 app.py
+```
