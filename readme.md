@@ -135,14 +135,21 @@ git clone https://$GITHUB_TOKEN@github.com/<USER>/<REPO>.git
 
 On Debian-based systems you can add the export to `~/.profile` or a dedicated `~/.bashrc_local` file, but be careful with file permissions (see security notes below).
 
-4) Run the project on the Pi
 
-Change into the repository directory and run whatever your project uses. Common examples:
+Change into the repository directory
+```
+cd <REPO>
+```
 
-Create a virtual environment (optional but recommended for Python projects):
+Install Pip3 using apt
+```
+sudo apt update
+sudo apt install python3-pip
+```
 
-```python3 -m venv venv
-source venv/bin/activate
+Install the virtualenv package (using apt, as latest pi version does not allow pip install virtualenv):
+```
+sudo apt install python3-venv
 ```
 
 Install the required dependencies (if any):
@@ -150,14 +157,103 @@ Install the required dependencies (if any):
 pip3 install -r requirements.txt
 ```
 
-Then run:
+4) Run the project on the Pi
 
 ```
-cd <REPO>
-# For Python
 python3 main.py
-# or for shell
-bash run.sh
-# or for Flask / FastAPI
-python3 app.py
+```
+
+
+## Running as a background service (tmux + systemd)
+
+Below are example files and commands to run the project in a detached tmux session at boot using systemd. Update paths and usernames if your setup differs.
+
+### Assumptions (change these to match your setup)
+
+- App folder: /home/rejin/system-rpi_zero
+- Virtualenv: /home/rejin/system-rpi_zero/.venv
+- Entry script: main.py
+- Run as user: rejin
+- tmux session name: pico-agent
+
+### Tiny run script (uses your venv)
+
+- Create: `/home/rejin/system-rpi_zero/run.sh`
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /home/rejin/system-rpi_zero
+
+# Use your project’s virtualenv Python
+exec /home/rejin/system-rpi_zero/.venv/bin/python -u main.py
+```
+
+- Make it executable:
+
+```bash
+chmod +x /home/rejin/system-rpi_zero/run.sh
+```
+
+### systemd unit (starts a tmux session at boot)
+
+Create: `/etc/systemd/system/pico-agent.service`
+
+```ini
+[Unit]
+Description=Pico Agent (tmux session at boot)
+After=network-online.target
+Wants=network-online.target
+# Optional: only start if the folder exists
+ConditionPathExists=/home/rejin/system-rpi_zero
+
+[Service]
+Type=forking
+User=rejin
+Group=rejin
+# Clean up any stale session before starting
+ExecStartPre=/bin/sh -c "/usr/bin/tmux has-session -t pico-agent 2>/dev/null && /usr/bin/tmux kill-session -t pico-agent || true"
+# Start a detached tmux session that runs your app via the venv
+ExecStart=/usr/bin/tmux new-session -d -s pico-agent '/home/rejin/system-rpi_zero/run.sh'
+# Stop cleanly by killing the tmux session
+ExecStop=/usr/bin/tmux kill-session -t pico-agent
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Enable and start:
+
+```bash
+sudo apt update
+sudo apt install -y tmux
+sudo systemctl daemon-reload
+sudo systemctl enable --now pico-agent.service
+```
+
+### Using it
+
+Attach to the live console later:
+
+```bash
+tmux attach -t pico-agent
+```
+
+Detach without stopping (leave it running): `Ctrl + B` (release), then D
+
+
+Check service health:
+
+```bash
+systemctl status pico-agent.service
+```
+
+
+Restart if you update code:
+
+```bash
+sudo systemctl restart pico-agent.service
 ```
