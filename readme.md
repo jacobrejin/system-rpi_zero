@@ -193,7 +193,7 @@ exec /home/rejin/system-rpi_zero/.venv/bin/python -u main.py
 - Make it executable:
 
 ```bash
-chmod +x /home/rejin/system-rpi_zero/run.sh
+chmod 775 /home/rejin/system-rpi_zero/run.sh
 ```
 
 ### systemd unit (starts a tmux session at boot)
@@ -205,24 +205,29 @@ Create: `/etc/systemd/system/pico-agent.service`
 Description=Pico Agent (tmux session at boot)
 After=network-online.target
 Wants=network-online.target
-# Optional: only start if the folder exists
 ConditionPathExists=/home/rejin/system-rpi_zero
 
 [Service]
-Type=forking
+Type=oneshot
+RemainAfterExit=yes
 User=rejin
 Group=rejin
-# Clean up any stale session before starting
-ExecStartPre=/bin/sh -c "/usr/bin/tmux has-session -t pico-agent 2>/dev/null && /usr/bin/tmux kill-session -t pico-agent || true"
-# Start a detached tmux session that runs your app via the venv
-ExecStart=/usr/bin/tmux new-session -d -s pico-agent '/home/rejin/system-rpi_zero/run.sh'
-# Stop cleanly by killing the tmux session
-ExecStop=/usr/bin/tmux kill-session -t pico-agent
-Restart=always
-RestartSec=3
+WorkingDirectory=/home/rejin/system-rpi_zero
+Environment=HOME=/home/rejin
+
+# Ensure a dedicated tmux server socket; ignore if it already exists
+ExecStart=/bin/sh -lc '/usr/bin/tmux -L pico-ag start-server || true'
+# Reuse session if present, else create and run your app
+ExecStart=/bin/sh -lc '/usr/bin/tmux -L pico-ag has-session -t pico-agent 2>/dev/null || /usr/bin/tmux -L pico-ag new-session -d -s pico-agent "/home/rejin/system-rpi_zero/run.sh"'
+
+# Clean stop
+ExecStop=/bin/sh -lc '/usr/bin/tmux -L pico-ag kill-session -t pico-agent 2>/dev/null || true'
+
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
+
 ```
 
 ### Enable and start:
@@ -236,10 +241,16 @@ sudo systemctl enable --now pico-agent.service
 
 ### Using it
 
+Check if the Tmux has any sessions:
+```bash
+tmux -L pico-ag ls
+```
+
+
 Attach to the live console later:
 
 ```bash
-tmux attach -t pico-agent
+tmux -L pico-ag attach -t pico-agent
 ```
 
 Detach without stopping (leave it running): `Ctrl + B` (release), then D
@@ -257,3 +268,4 @@ Restart if you update code:
 ```bash
 sudo systemctl restart pico-agent.service
 ```
+
