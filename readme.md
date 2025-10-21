@@ -81,7 +81,12 @@ nmcli -f NAME,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
 | Logs for Wi‑Fi | `journalctl -u NetworkManager -b | tail -n 50` |
 | Test connectivity | `ping -c4 8.8.8.8` |
 
+<br>
+<br>
+
 # Using the Auto-Setup Script
+
+The above steps are automated in the script `setup_pi_wifi_rpi_connect.sh` included in this repository.
 
 1 - Copy to your Pi and run as root
 chmod +x setup_pi_wifi_rpi_connect.sh
@@ -97,7 +102,10 @@ sudo ./setup_pi_wifi_rpi_connect.sh
 
 ---
 
-## Cloning and running a private GitHub repository on the Pi
+<br>
+<br>
+
+# Cloning and running a private GitHub repository on the Pi
 
 You can clone a private GitHub repository to your Raspberry Pi Zero 2W using a Personal Access Token (PAT). The PAT method is the safest option for automation and scripts.
 
@@ -151,6 +159,15 @@ Install the virtualenv package (using apt, as latest pi version does not allow p
 ```
 sudo apt install python3-venv
 ```
+Create a virtual environment (optional but recommended):
+```
+virtualenv env
+```
+
+activate a virtual environment (optional but recommended):
+```
+source env/bin/activate
+```
 
 Install the required dependencies (if any):
 ```
@@ -187,7 +204,7 @@ set -euo pipefail
 cd /home/rejin/system-rpi_zero
 
 # Use your project’s virtualenv Python
-exec /home/rejin/system-rpi_zero/.venv/bin/python -u main.py
+exec /home/rejin/system-rpi_zero/env/bin/python -u main.py
 ```
 
 - Make it executable:
@@ -268,4 +285,49 @@ Restart if you update code:
 ```bash
 sudo systemctl restart pico-agent.service
 ```
+
+## Automated setup script (tmux + systemd)
+
+A convenience script is included to automate creating `run.sh`, the systemd unit and enabling the service.
+
+File: `scripts/setup_tmux_systemd.sh`
+
+Summary: run this on the Pi (as root) to create the `run.sh` launcher, install `tmux`, write `/etc/systemd/system/<service>.service`, reload systemd and enable/start the service.
+
+Usage example (run on the Pi in the project folder):
+
+```bash
+cd /home/rejin/system-rpi_zero
+sudo ./scripts/setup_tmux_systemd.sh \
+   --app-dir /home/rejin/system-rpi_zero \
+   --user rejin \
+   --service-name pico-agent \
+   --venv /home/rejin/system-rpi_zero/env/bin/python
+```
+
+Notes:
+- The script defaults match the example unit above: app dir `/home/rejin/system-rpi_zero`, user `rejin`, service name `pico-agent` and venv python at `env/bin/python`.
+- The script must be run as root (use `sudo`) because it writes to `/etc/systemd/system` and installs packages.
+- `run.sh` is created with executable permissions and will use the provided venv python if present, otherwise `python3`.
+
+How to attach to the running console after install:
+
+```bash
+tmux -L pico-ag attach -t pico-agent
+```
+
+List sessions:
+
+```bash
+tmux -L pico-ag ls
+```
+
+Restart after updating code:
+
+```bash
+sudo systemctl restart pico-agent.service
+```
+
+If you want to customize further (different socket name, session name, or non-venv python) call the script with the flags shown above.
+
 
