@@ -101,17 +101,26 @@ if check_cmd rpi-connect; then
   # D-Bus session bus, so we must run the commands as the regular user.
   SUDO_USER_REAL="${SUDO_USER:-$(logname)}"
 
+  # Enable lingering for the real user before trying to start the user's
+  # background agent. Enabling linger allows the per-user systemd instance
+  # to run without an interactive login session which rpi-connect relies on.
+  loginctl enable-linger "${SUDO_USER_REAL}" || warn "Could not enable linger for ${SUDO_USER_REAL}"
+
   # Prefer `runuser` (no password) when available; otherwise fall back to
-  # `sudo -u`. Build the command prefix as an array for safe expansion.
+  # `sudo -u` with a login shell. Use a login shell so that the user's
+  # environment (XDG_RUNTIME_DIR, DBUS session, etc.) is initialised when
+  # rpi-connect interacts with the per-user session.
   if check_cmd runuser; then
-    RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" --)
+    RUN_AS_USER_CMD=(runuser -l -u "${SUDO_USER_REAL}" --)
   else
-    RUN_AS_USER_CMD=(sudo -u "${SUDO_USER_REAL}" --)
+    RUN_AS_USER_CMD=(sudo -u "${SUDO_USER_REAL}" -i --)
   fi
 
   say "Enabling RPi Connect for user: ${SUDO_USER_REAL}"
   if ! "${RUN_AS_USER_CMD[@]}" rpi-connect on >/dev/null 2>&1; then
-    warn "Could not run 'rpi-connect on' as ${SUDO_USER_REAL}; continuing but sign-in may fail."
+    warn "Could not run 'rpi-connect on' as ${SUDO_USER_REAL}; attempting fallback start."
+    # Try a best-effort fallback to start the user service via systemd --user
+    "${RUN_AS_USER_CMD[@]}" systemctl --user start rpi-connect 2>/dev/null || true
   else
     ok "rpi-connect enabled for ${SUDO_USER_REAL}"
   fi
@@ -127,10 +136,7 @@ if check_cmd rpi-connect; then
     ok "RPi Connect already signed in."
   fi
 
-  # Enable lingering for the real user so the rpi-connect background helper
-  # can persist beyond interactive sessions. When running as root we do not
-  # need to prefix with sudo.
-  loginctl enable-linger "${SUDO_USER_REAL}" || warn "Could not enable linger for ${SUDO_USER_REAL}"
+  # (linger was enabled earlier before attempting to start rpi-connect)
 else
   warn "rpi-connect not installed. Install later with: sudo apt install rpi-connect-lite"
 fi
