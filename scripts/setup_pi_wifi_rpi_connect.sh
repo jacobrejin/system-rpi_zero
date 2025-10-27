@@ -100,6 +100,9 @@ if check_cmd rpi-connect; then
   # to the login name. Running rpi-connect as root fails due to missing
   # D-Bus session bus, so we must run the commands as the regular user.
   SUDO_USER_REAL="${SUDO_USER:-$(logname)}"
+  # Determine the numeric UID for the real user so we can point at their
+  # runtime directory (/run/user/<UID>) when running commands with runuser.
+  SUDO_USER_UID="$(id -u "${SUDO_USER_REAL}" 2>/dev/null || true)"
 
   # Enable lingering for the real user before trying to start the user's
   # background agent. Enabling linger allows the per-user systemd instance
@@ -112,8 +115,16 @@ if check_cmd rpi-connect; then
   # call `runuser -u <user> --` instead. When `sudo` is used we use `-i`
   # to create a login shell which initialises the user's environment.
   if check_cmd runuser; then
-    RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" --)
+    # runuser doesn't populate XDG_RUNTIME_DIR/DBUS variables for us. Set
+    # them explicitly so the per-user systemd and D-Bus socket are usable.
+    if [[ -n "${SUDO_USER_UID}" ]]; then
+      RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" -- env XDG_RUNTIME_DIR="/run/user/${SUDO_USER_UID}" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${SUDO_USER_UID}/bus")
+    else
+      RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" --)
+    fi
   else
+    # sudo -i gives a login shell and initialises the user's environment
+    # including XDG_RUNTIME_DIR where possible.
     RUN_AS_USER_CMD=(sudo -u "${SUDO_USER_REAL}" -i --)
   fi
 
