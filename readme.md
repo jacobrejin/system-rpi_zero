@@ -157,7 +157,7 @@ sudo apt install python3-pip
 
 Install the virtualenv package (using apt, as latest pi version does not allow pip install virtualenv):
 ```
-sudo apt install python3-venv
+sudo apt install python3-virtualenv
 ```
 Create a virtual environment (optional but recommended):
 ```

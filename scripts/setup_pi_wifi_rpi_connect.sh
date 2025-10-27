@@ -99,7 +99,9 @@ if check_cmd rpi-connect; then
   rpi-connect on || true
   # If not already signed in, start the interactive signin flow which may
   # present a URL for the user to open in a browser to authorise the device.
-  if ! rpi-connect whoami >/dev/null 2>&1; then
+  # The `whoami` subcommand isn't available; use `rpi-connect status` and
+  # look for a line like: "signed in: yes" (case-insensitive).
+  if ! rpi-connect status 2>/dev/null | grep -iq '^signed in:[[:space:]]*yes'; then
     say "Starting sign-in flow (follow the URL shown)"
     rpi-connect signin || warn "rpi-connect signin skipped/failed; run manually later."
   else
