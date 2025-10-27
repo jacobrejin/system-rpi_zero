@@ -95,22 +95,42 @@ systemctl start NetworkManager || true
 # available.
 say "Configuring persistent RPi Connect sign-in"
 if check_cmd rpi-connect; then
-  # Turn the service on (best-effort)
-  rpi-connect on || true
-  # If not already signed in, start the interactive signin flow which may
-  # present a URL for the user to open in a browser to authorise the device.
-  # The `whoami` subcommand isn't available; use `rpi-connect status` and
-  # look for a line like: "signed in: yes" (case-insensitive).
-  if ! rpi-connect status 2>/dev/null | grep -iq '^signed in:[[:space:]]*yes'; then
+  # Run rpi-connect commands as the invoking non-root user. When this script
+  # is run via sudo the SUDO_USER variable will be set; otherwise fall back
+  # to the login name. Running rpi-connect as root fails due to missing
+  # D-Bus session bus, so we must run the commands as the regular user.
+  SUDO_USER_REAL="${SUDO_USER:-$(logname)}"
+
+  # Prefer `runuser` (no password) when available; otherwise fall back to
+  # `sudo -u`. Build the command prefix as an array for safe expansion.
+  if check_cmd runuser; then
+    RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" --)
+  else
+    RUN_AS_USER_CMD=(sudo -u "${SUDO_USER_REAL}" --)
+  fi
+
+  say "Enabling RPi Connect for user: ${SUDO_USER_REAL}"
+  if ! "${RUN_AS_USER_CMD[@]}" rpi-connect on >/dev/null 2>&1; then
+    warn "Could not run 'rpi-connect on' as ${SUDO_USER_REAL}; continuing but sign-in may fail."
+  else
+    ok "rpi-connect enabled for ${SUDO_USER_REAL}"
+  fi
+
+  # Check sign-in status (run as the user). If not signed in, start the
+  # interactive signin flow which will present a URL to the user.
+  if ! "${RUN_AS_USER_CMD[@]}" bash -c 'rpi-connect status 2>/dev/null | grep -iq "^signed in:[[:space:]]*yes"'; then
     say "Starting sign-in flow (follow the URL shown)"
-    rpi-connect signin || warn "rpi-connect signin skipped/failed; run manually later."
+    if ! "${RUN_AS_USER_CMD[@]}" rpi-connect signin; then
+      warn "rpi-connect signin skipped/failed; run manually later."
+    fi
   else
     ok "RPi Connect already signed in."
   fi
-  # Use the invoking user if available; enable lingering for that user so the
-  # rpi-connect background helper can persist beyond interactive sessions.
-  SUDO_USER_REAL="${SUDO_USER:-$(logname)}"
-  sudo loginctl enable-linger "$SUDO_USER_REAL" || warn "Could not enable linger for $SUDO_USER_REAL"
+
+  # Enable lingering for the real user so the rpi-connect background helper
+  # can persist beyond interactive sessions. When running as root we do not
+  # need to prefix with sudo.
+  loginctl enable-linger "${SUDO_USER_REAL}" || warn "Could not enable linger for ${SUDO_USER_REAL}"
 else
   warn "rpi-connect not installed. Install later with: sudo apt install rpi-connect-lite"
 fi
