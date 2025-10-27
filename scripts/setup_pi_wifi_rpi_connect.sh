@@ -107,11 +107,12 @@ if check_cmd rpi-connect; then
   loginctl enable-linger "${SUDO_USER_REAL}" || warn "Could not enable linger for ${SUDO_USER_REAL}"
 
   # Prefer `runuser` (no password) when available; otherwise fall back to
-  # `sudo -u` with a login shell. Use a login shell so that the user's
-  # environment (XDG_RUNTIME_DIR, DBUS session, etc.) is initialised when
-  # rpi-connect interacts with the per-user session.
+  # `sudo -u` with a login shell. Note: some `runuser` implementations do
+  # not support combining the login flag with --user, so we avoid `-l` and
+  # call `runuser -u <user> --` instead. When `sudo` is used we use `-i`
+  # to create a login shell which initialises the user's environment.
   if check_cmd runuser; then
-    RUN_AS_USER_CMD=(runuser -l -u "${SUDO_USER_REAL}" --)
+    RUN_AS_USER_CMD=(runuser -u "${SUDO_USER_REAL}" --)
   else
     RUN_AS_USER_CMD=(sudo -u "${SUDO_USER_REAL}" -i --)
   fi
