@@ -103,7 +103,15 @@ def find_pico_drive(label="RPI-RP2", timeout=20.0):
                         os.makedirs(mount_point, exist_ok=True)
                         print(f"Mounting {device_path} -> {mount_point}")
                         subprocess.run(
-                            ["sudo", "mount", device_path, mount_point], check=False
+                            [
+                                "sudo",
+                                "mount",
+                                "-o",
+                                "uid=1000,gid=1000",
+                                device_path,
+                                mount_point,
+                            ],
+                            check=False,
                         )
                         return mount_point
             except Exception as e:
