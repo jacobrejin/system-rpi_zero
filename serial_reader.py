@@ -294,12 +294,13 @@ class SerialReaderThread(threading.Thread):
         Returns mountpoint string or None.
         """
         label = PICO_DRIVE_LABEL
+        system = platform.system()
 
-        # Iterate disk partitions and match by volume label (Windows) or heuristics
+        # 1) Check already-mounted partitions first (Windows or Unix)
         for part in psutil.disk_partitions(all=False):
             try:
-                # On Windows, check volume label using WinAPI
-                if platform.system() == "Windows":
+                # Windows: try to read the volume label via WinAPI
+                if system == "Windows":
                     try:
                         volume_name_buf = ctypes.create_unicode_buffer(1024)
                         fs_name_buf = ctypes.create_unicode_buffer(1024)
@@ -320,10 +321,10 @@ class SerialReaderThread(threading.Thread):
                             if label.lower() in volume_name_buf.value.lower():
                                 return part.mountpoint
                     except Exception:
-                        # Fall back to checking mountpoint or device name
+                        # fall through to heuristics
                         pass
 
-                # On other platforms, check mountpoint / device name heuristics
+                # Generic heuristics (device name or mountpoint contains label)
                 if label.lower() in (part.device or "").lower():
                     return part.mountpoint
                 if label.lower() in (part.mountpoint or "").lower():
@@ -333,10 +334,62 @@ class SerialReaderThread(threading.Thread):
                 if part.mountpoint and (
                     "/media" in part.mountpoint or "/run/media" in part.mountpoint
                 ):
-                    # If the device is small and FAT, it's likely the UF2 drive
                     if part.fstype and part.fstype.lower().startswith("fat"):
                         return part.mountpoint
             except Exception:
                 continue
+
+        # 2) Linux fallback: detect unmounted block device by label and attempt to mount it
+        if system == "Linux":
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    ["lsblk", "-o", "NAME,LABEL,MOUNTPOINT", "-P"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in result.stdout.splitlines():
+                    # Parse KEY="value" pairs produced by lsblk -P
+                    fields = dict(kv.split("=", 1) for kv in line.split() if "=" in kv)
+                    label_field = fields.get("LABEL", "").strip('"')
+                    mount_field = fields.get("MOUNTPOINT", "").strip('"')
+                    name_field = fields.get("NAME", "").strip('"')
+
+                    if (
+                        label_field
+                        and label_field.lower() == label.lower()
+                        and not mount_field
+                    ):
+                        device_path = f"/dev/{name_field}"
+                        mount_point = f"/mnt/{label_field}"
+                        try:
+                            os.makedirs(mount_point, exist_ok=True)
+                        except Exception:
+                            pass
+
+                        try:
+                            # Try to mount; failure is non-fatal (we still return mount_point)
+                            subprocess.run(
+                                [
+                                    "sudo",
+                                    "mount",
+                                    "-o",
+                                    "uid=1000,gid=1000",
+                                    device_path,
+                                    mount_point,
+                                ],
+                                check=False,
+                            )
+                        except Exception as e:
+                            print(
+                                f"Linux mount fallback error during mount: {e}",
+                                flush=True,
+                            )
+
+                        return mount_point
+            except Exception as e:
+                print(f"Linux mount fallback error: {e}", flush=True)
 
         return None
