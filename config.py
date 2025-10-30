@@ -34,3 +34,11 @@ DATA_LINE_PREFIX = "[D]"  # Prefix that identifies data lines
 
 # Threading
 THREAD_JOIN_TIMEOUT = 2.0  # seconds
+
+# Upload / UF2 settings
+UPLOAD_FOLDER = "upload_binary"
+PICO_DRIVE_LABEL = "RPI-RP2"
+UPLOAD_COMMAND = "::RPI-ZERO-LOG::UPLOAD"
+UF2_DETECT_TIMEOUT = 20.0  # seconds to wait for UF2 drive to appear
+UF2_COPY_RETRY = 3  # attempts to copy UF2 file
+UF2_COPY_WAIT = 0.5  # seconds between copy retries
