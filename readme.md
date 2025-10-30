@@ -328,6 +328,21 @@ Restart after updating code:
 sudo systemctl restart pico-agent.service
 ```
 
-If you want to customize further (different socket name, session name, or non-venv python) call the script with the flags shown above.
+## Firmware upload (Pico UF2)
 
+A short note on how to upload firmware (.uf2) to a Raspberry Pi Pico from this project.
 
+- Place the .uf2 file(s) you want to flash into the project `upload_binary/` folder (repo root).
+- The running agent (the serial reader in this project) can perform the upload automatically: it sends an `UPLOAD` command to the Pico, closes the serial port and opens it at 1200 baud to trigger the RP2040 UF2 bootloader. The agent then waits for the mass-storage drive (typically labelled `RPI-RP2`) to appear and copies any `*.uf2` files from `upload_binary/` to the Pico.
+- If the automatic upload fails or you prefer to do it manually, the helper script `test.py` can trigger the bootloader and copy files. Example (replace `COM5` with your port on Windows or `/dev/ttyACM0` on Linux):
+
+```bash
+python test.py --serial COM5
+```
+
+- Troubleshooting tips:
+   - Ensure your `.uf2` file is present in `upload_binary/` before triggering an upload.
+   - On Windows the Pico drive usually shows up with label `RPI-RP2`; on Linux it is usually mounted under `/media` or `/run/media`.
+   - If the drive doesn't appear immediately, wait a few seconds and retry the trigger/copy.
+
+This workflow avoids manual unplugging: opening the serial port at 1200 baud signals the Pico to reboot into UF2 bootloader mode, after which the OS exposes the Pico as a removable drive and copying the `.uf2` installs the new firmware.
