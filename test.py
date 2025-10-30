@@ -7,6 +7,7 @@ import glob
 import psutil
 import platform
 import ctypes
+import subprocess
 
 
 def get_volume_label_windows(drive_letter):
@@ -33,40 +34,80 @@ def get_volume_label_windows(drive_letter):
 
 
 def find_pico_drive(label="RPI-RP2", timeout=20.0):
-    """Find the Pico UF2 drive. Works on Windows and Linux/macOS with heuristics.
-
-    Returns the mountpoint path or None if not found within timeout seconds.
+    """
+    Find (and if necessary mount) the Raspberry Pi Pico UF2 drive.
+    Works on Linux (Raspbian) and Windows.
+    Returns the mount point path or None if not found within timeout.
     """
     deadline = time.time() + timeout
     system = platform.system()
 
     while time.time() < deadline:
+        # --- Step 1: Check already-mounted drives ---
         for part in psutil.disk_partitions(all=False):
             try:
-                # Windows: check volume label via WinAPI
+                # Windows: match by volume label
                 if system == "Windows":
-                    try:
-                        # device usually like 'E:' or '\\?\\Volume{...}' — pass mountpoint for GetVolumeInformationW
-                        label_name = get_volume_label_windows(part.device)
-                        if label_name and label.lower() in label_name.lower():
-                            return part.mountpoint
-                    except Exception:
-                        pass
+                    from ctypes import (
+                        create_unicode_buffer,
+                        c_ulong,
+                        byref,
+                        windll,
+                        c_wchar_p,
+                        sizeof,
+                    )
 
-                # Generic heuristics: mountpoint name contains label (e.g., /media/pi/RPI-RP2)
-                mount_basename = os.path.basename(part.mountpoint.rstrip(os.sep))
-                if mount_basename and label.lower() in mount_basename.lower():
-                    return part.mountpoint
-
-                # Many systems mount removable UF2 as FAT under /media or /run/media
-                if part.mountpoint and (
-                    "/media" in part.mountpoint or "/run/media" in part.mountpoint
-                ):
-                    if part.fstype and part.fstype.lower().startswith("fat"):
-                        # optionally confirm by label on Windows only
+                    volume_name_buf = create_unicode_buffer(1024)
+                    fs_name_buf = create_unicode_buffer(1024)
+                    serial_number = c_ulong()
+                    max_component_length = c_ulong()
+                    file_system_flags = c_ulong()
+                    rc = windll.kernel32.GetVolumeInformationW(
+                        c_wchar_p(part.device),
+                        volume_name_buf,
+                        sizeof(volume_name_buf),
+                        byref(serial_number),
+                        byref(max_component_length),
+                        byref(file_system_flags),
+                        fs_name_buf,
+                        sizeof(fs_name_buf),
+                    )
+                    if rc and label.lower() in volume_name_buf.value.lower():
+                        return part.mountpoint
+                else:
+                    # Linux / macOS: match by mount path name
+                    mount_basename = os.path.basename(part.mountpoint.rstrip(os.sep))
+                    if label.lower() in mount_basename.lower():
                         return part.mountpoint
             except Exception:
                 continue
+
+        # --- Step 2: Linux fallback: detect unmounted block device ---
+        if system == "Linux":
+            try:
+                result = subprocess.run(
+                    ["lsblk", "-o", "NAME,LABEL,MOUNTPOINT", "-P"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                for line in result.stdout.splitlines():
+                    fields = dict(kv.split("=", 1) for kv in line.split() if "=" in kv)
+                    label_field = fields.get("LABEL", "").strip('"')
+                    mount_field = fields.get("MOUNTPOINT", "").strip('"')
+                    name_field = fields.get("NAME", "").strip('"')
+
+                    if label_field.lower() == label.lower() and not mount_field:
+                        device_path = f"/dev/{name_field}"
+                        mount_point = f"/mnt/{label_field}"
+                        os.makedirs(mount_point, exist_ok=True)
+                        print(f"Mounting {device_path} -> {mount_point}")
+                        subprocess.run(
+                            ["sudo", "mount", device_path, mount_point], check=False
+                        )
+                        return mount_point
+            except Exception as e:
+                print("Linux mount fallback error:", e)
 
         time.sleep(0.5)
 
