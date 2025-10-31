@@ -10,6 +10,7 @@ import os
 import glob
 import shutil
 import platform
+import subprocess
 
 import psutil
 import ctypes
@@ -26,6 +27,7 @@ from config import (
     UPLOAD_FOLDER,
     PICO_DRIVE_LABEL,
     UPLOAD_COMMAND,
+    SHUTDOWN_COMMAND,
     UF2_DETECT_TIMEOUT,
     UF2_COPY_RETRY,
     UF2_COPY_WAIT,
@@ -136,6 +138,14 @@ class SerialReaderThread(threading.Thread):
                         self.out_q.put(text)
                         break
 
+                    # If the Pico requests a shutdown during handshake
+                    if SHUTDOWN_COMMAND in text:
+                        try:
+                            self._handle_shutdown(ser)
+                        except Exception as e:
+                            print(f"Shutdown handling error: {e}", flush=True)
+                        return False
+
         return found_marker
 
     def _read_loop(self, ser: serial.Serial, buf: bytearray):
@@ -177,6 +187,15 @@ class SerialReaderThread(threading.Thread):
                 if raw.endswith(b"\r"):
                     raw = raw[:-1]
                 text = raw.decode("utf-8", errors="replace")
+                # Detect shutdown command mid-run
+                if SHUTDOWN_COMMAND in text:
+                    try:
+                        self._handle_shutdown(ser)
+                    except Exception as e:
+                        print(f"Shutdown handling error: {e}", flush=True)
+                    # Return so outer context closes serial and run() can exit
+                    return
+
                 self.out_q.put(text)
 
     # Public API: request firmware upload. os_name can be passed (e.g., 'Windows').
@@ -274,6 +293,54 @@ class SerialReaderThread(threading.Thread):
         # and allow the outer loop to reconnect and perform handshake again.
         print("Upload sequence finished; waiting for Pico to reboot...", flush=True)
         self.upload_event.clear()
+
+    def _handle_shutdown(self, ser: serial.Serial):
+        """Close serial and attempt to shut down the host using sudo poweroff on Linux.
+
+        This uses os.system("sudo poweroff") for Linux (as requested). If running
+        on Windows it falls back to the Windows shutdown command. The method will
+        set the thread stop event so the rest of the program can exit cleanly.
+        """
+        print(
+            "Shutdown requested by Pico: closing serial and attempting shutdown...",
+            flush=True,
+        )
+
+        # Close/flush serial
+        try:
+            try:
+                ser.flush()
+            except Exception:
+                pass
+            try:
+                ser.close()
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # Signal other threads to stop
+        try:
+            self.stop_evt.set()
+        except Exception:
+            pass
+
+        # Perform platform-appropriate shutdown using the sudo + os.system approach on Linux
+        try:
+            system = platform.system()
+            if system == "Linux":
+                # Use os.system to run the sudo poweroff command (will require sudoers/NOPASSWD for non-root)
+                print("Executing: sudo poweroff", flush=True)
+                os.system("sudo poweroff")
+            elif system == "Windows":
+                print("Executing Windows shutdown: shutdown /s /t 0", flush=True)
+                os.system("shutdown /s /t 0")
+            else:
+                # Generic fallback
+                print("Executing generic shutdown: sudo shutdown -h now", flush=True)
+                os.system("sudo shutdown -h now")
+        except Exception as e:
+            print(f"Error while attempting shutdown: {e}", flush=True)
 
     def _wait_for_uf2_drive(self, timeout: float = 20.0):
         """Wait up to `timeout` seconds for a drive with the Pico label to appear.

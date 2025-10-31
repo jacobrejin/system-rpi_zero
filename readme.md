@@ -328,6 +328,36 @@ Restart after updating code:
 sudo systemctl restart pico-agent.service
 ```
 
+Temporarlity stop and disbale the service:
+
+```bash
+sudo systemctl disable --now pico-agent.service
+sudo systemctl stop pico-agent.service
+
+```
+
+disable → prevents it from starting at boot.
+stop → stops it right now if it’s currently running.
+
+Confirm it’s stopped:
+
+```bash
+systemctl is-enabled pico-agent.service
+```
+
+Chekc if the service is running on tmux
+
+```bash
+tmux -L pico-ag ls
+```
+
+Kill the tmux session if it’s still present:
+
+```bash
+tmux -L pico-ag kill-session -t pico-agent
+```
+
+
 ## Firmware upload (Pico UF2)
 
 A short note on how to upload firmware (.uf2) to a Raspberry Pi Pico from this project.
@@ -346,3 +376,30 @@ python test.py --serial COM5
    - If the drive doesn't appear immediately, wait a few seconds and retry the trigger/copy.
 
 This workflow avoids manual unplugging: opening the serial port at 1200 baud signals the Pico to reboot into UF2 bootloader mode, after which the OS exposes the Pico as a removable drive and copying the `.uf2` installs the new firmware.
+
+
+   ---
+
+   ## Granting shutdown permission to the log agent (optional)
+
+   If you'd like the Zero-running Python script to be able to power off the host when the Pico requests it (marker: `::RPI-ZERO-LOG::SHUTDOWN`), the simplest method is to allow the user to run the poweroff command via sudo without a password.
+
+   1. Open the sudoers file safely:
+
+   ```sh
+   sudo visudo
+   ```
+
+   2. Add a line (replace `pi` with the username running the script):
+
+   ```
+   pi ALL=NOPASSWD: /sbin/shutdown, /sbin/poweroff, /sbin/reboot
+   ```
+
+   3. Save and exit `visudo`.
+
+   After this, the Python code will call `os.system("sudo poweroff")` when it receives the shutdown marker from the Pico. If you don't add a sudoers entry, the script must be started as root (for example: as a systemd service) for shutdown to succeed without prompting for a password.
+
+   Security note: Only grant NOPASSWD sudo for the minimal set of commands required; using `visudo` ensures syntax checks and reduces risk of locking out sudo access.
+
+   If you prefer, I can also add a small example `systemd` unit file and instructions to run the agent as a service (so it already runs as root and can call `systemctl poweroff` directly). Let me know which option you prefer.

@@ -42,3 +42,6 @@ UPLOAD_COMMAND = "::RPI-ZERO-LOG::UPLOAD"
 UF2_DETECT_TIMEOUT = 20.0  # seconds to wait for UF2 drive to appear
 UF2_COPY_RETRY = 3  # attempts to copy UF2 file
 UF2_COPY_WAIT = 0.5  # seconds between copy retries
+
+# Commands that can be sent from the Pico to the Zero
+SHUTDOWN_COMMAND = "::RPI-ZERO-LOG::SHUTDOWN"
